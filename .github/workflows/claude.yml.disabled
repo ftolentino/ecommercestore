@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# INERT. GitHub only reads .yml / .yaml files in this directory, so the
+# `.disabled` suffix means this workflow is ignored entirely.
+#
+# To enable:
+#   1. Add ANTHROPIC_API_KEY to repo secrets
+#      (Settings → Secrets and variables → Actions)
+#   2. Install the Claude GitHub App: https://github.com/apps/claude
+#   3. Rename this file to `claude.yml`
+#
+# Cost note: this bills Claude API credits from console.anthropic.com — which
+# is separate from a Claude Code subscription — and consumes Actions minutes.
+# By design there is no automatic review on every PR; Claude runs only when
+# someone writes @claude in a comment, so invocations stay deliberate.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude:
+    # Only run when a human actually mentions @claude.
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 10

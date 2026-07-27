@@ -12,25 +12,30 @@ All product data comes from the [DummyJSON API](https://dummyjson.com/). This is
 
 ## 2. Technical requirements
 
-| Layer | Choice | Constraint notes |
-|---|---|---|
-| Front end | React + Vite | Use JavaScript, not TypeScript |
-| State management | Zustand | Use Zustand, not Redux, and name it clearly |
-| Components and styling | Ply CSS | No other UI libraries — https://www.plycss.com/ |
-| Data source | DummyJSON API | This is the only product data source; no custom product database |
-| Database | Firestore | Only for cart persistence if you reach the Cart phase |
-| Auth | Firebase Auth | Stretch only; skip it unless you have already covered it |
-| Deployment | Vercel | Auto-deploy from GitHub; production tracks the `production` branch |
+| Layer                  | Choice        | Constraint notes                                                   |
+| ---------------------- | ------------- | ------------------------------------------------------------------ |
+| Front end              | React + Vite  | Use JavaScript, not TypeScript                                     |
+| State management       | Zustand       | Use Zustand, not Redux, and name it clearly                        |
+| Components and styling | Ply CSS       | No other UI libraries — https://www.plycss.com/                    |
+| Data source            | DummyJSON API | This is the only product data source; no custom product database   |
+| Database               | Firestore     | Only for cart persistence if you reach the Cart phase              |
+| Auth                   | Firebase Auth | Stretch only; skip it unless you have already covered it           |
+| Deployment             | Vercel        | Auto-deploy from GitHub; production tracks the `production` branch |
 
 ### Approved additions to the table above
 
 These are **not** in the original stack spec. They were added deliberately; do not add anything else without asking.
 
-| Package | Why |
-|---|---|
-| `react-router-dom` | The category-filtered listing and product detail views need real URLs (`/products?category=laptops`, `/products/:id`) so links are shareable and the back button works. It is a router, not a UI or styling library, so it does not conflict with the "no other UI libraries" rule. |
-| `eslint`, `prettier` + plugins | Editor and CI code quality. See [§8](#8-code-style-and-linting). |
-| `vitest` | Logic-only unit tests. See [§8](#8-code-style-and-linting). |
+| Package                            | Why                                                                                                                                                                                                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `react-router-dom`                 | The category-filtered listing and product detail views need real URLs (`/products?category=laptops`, `/products/:id`) so links are shareable and the back button works. It is a router, not a UI or styling library, so it does not conflict with the "no other UI libraries" rule. |
+| `eslint`, `prettier` + plugins     | Editor and CI code quality. See [§8](#8-code-style-and-linting).                                                                                                                                                                                                                    |
+| `vitest`                           | Logic-only unit tests. See [§8](#8-code-style-and-linting).                                                                                                                                                                                                                         |
+| `@types/react`, `@types/react-dom` | Editor IntelliSense only. These are type _definitions_ consumed by VS Code — there is no `tsconfig.json`, no compilation step, and no `.ts`/`.tsx` source. The "JavaScript only" rule is unaffected.                                                                                |
+
+### Dependencies added per phase, not up front
+
+`zustand` (Phase 5) and `firebase` (Phase 6) are **not installed yet**. "Do not build ahead of the current phase" applies to dependencies too — each arrives in the phase that first uses it, so the lockfile stays honest about what the app actually needs.
 
 ---
 
@@ -83,6 +88,8 @@ Ply ships a machine-readable reference. **Read these before writing any custom C
 - **Use `<button>` for buttons, never `<a>`.** Buttons use `btn` plus a variant (`btn-primary`, `btn-secondary`, `btn-ghost`, `btn-primary-outline`, sizes `btn-sm`/`btn-xs`). `btn-icon` requires an `aria-label`.
 - **Never hard-code colors.** Use `var(--ply-*)` custom properties, or dark mode breaks. Surfaces follow `--ply-{color}-surface` / `-border` / `-1` / `-2` / `-3` across blue, red, green, yellow, indigo, purple, pink, orange, teal, cyan.
 - **Never invent utility classes.** `.color-gray-60` does not exist. Text colors are `text-primary`, `text-secondary`, `text-tertiary`.
+- **Responsive variants are not top-level keys in `ply-classes.json`.** `tablet-unit-100` is real, but you will not find it as a key — each base class carries a `responsive` array listing its valid prefixes (`tablet-`, `phone-`, `container-tablet-`, …). Not finding a prefixed name in the JSON does not mean it is invalid; check the base class's `responsive` array, or grep `dist/css/ply.css`.
+- **Navigation is `<nav class="navbar"> > <ul> > <li> > <a>`,** and the `active` class goes on the `<li>`, not the `<a>`. React Router's `NavLink` puts its class on the anchor, so use `useLocation()` to mark the `<li>` instead.
 - **Start with semantic HTML.** Ply auto-styles `<table>`, `<nav>`, `<dialog>`, `<details>`, `<blockquote>`, `<code>`, headings, and form controls with no classes at all. Reach for the native element before adding a `<div>` wrapper.
 - Cards are a utility combination, not a component: a surface background, a border, and padding.
 
@@ -92,14 +99,14 @@ Ply ships a machine-readable reference. **Read these before writing any custom C
 
 Base URL: `https://dummyjson.com`. No API key. 194 products across 24 categories.
 
-| Need | Endpoint |
-|---|---|
-| Featured products (home) | `/products?limit=8` |
-| Category-filtered listing | `/products/category/{slug}` |
-| Category options | `/products/categories` |
-| Product details | `/products/{id}` |
-| Paginated listing | `/products?limit={n}&skip={n}` |
-| Search (only if a phase calls for it) | `/products/search?q={query}` |
+| Need                                  | Endpoint                       |
+| ------------------------------------- | ------------------------------ |
+| Featured products (home)              | `/products?limit=8`            |
+| Category-filtered listing             | `/products/category/{slug}`    |
+| Category options                      | `/products/categories`         |
+| Product details                       | `/products/{id}`               |
+| Paginated listing                     | `/products?limit={n}&skip={n}` |
+| Search (only if a phase calls for it) | `/products/search?q={query}`   |
 
 ### Response shapes — these differ, and it matters
 
@@ -139,6 +146,8 @@ src/
     ProductListPage.jsx
     ProductDetailPage.jsx
     CartPage.jsx
+    NotFoundPage.jsx    Catch-all. The SPA rewrite sends every unknown URL
+                        to the router, so without this they render blank.
   lib/
     cart.js             Pure cart math. Unit-tested.
   App.jsx               Routes.
@@ -164,13 +173,15 @@ Add files within this layout. Do not introduce new top-level folders under `src/
 
 ### ESLint
 
-ESLint 9 **flat config** in `eslint.config.js`, based on the Vite React template:
+ESLint 10 **flat config** in `eslint.config.js`. It is hand-written, **not** inherited from the Vite React template — as of `create-vite@9` that template ships [oxlint](https://oxc.rs/) and no `eslint.config.js` at all. Oxlint is deliberately removed; ESLint is the linter here.
 
 - `@eslint/js` recommended
-- `eslint-plugin-react-hooks`
-- `eslint-plugin-react-refresh`
+- `eslint-plugin-react-hooks` — exposes its flat config as `configs['recommended-latest']`
+- `eslint-plugin-react-refresh` — exposes `configs.vite`
 - `globals` for browser globals
 - `eslint-config-prettier` **last in the array**, so it can turn off rules that conflict with Prettier
+
+ESLint 10 requires Node `^20.19.0 || ^22.13.0 || >=24`.
 
 ### Prettier
 
@@ -190,7 +201,9 @@ Prettier runs **separately from ESLint**. Do **not** install `eslint-plugin-pret
 
 ### Tests
 
-Vitest, **logic only** — `src/lib/cart.js` math and any API response-mapping helpers. No component tests, no React Testing Library, no jsdom environment needed unless a later phase justifies it.
+Vitest, **logic only** — `src/lib/cart.js` math and any API response-mapping helpers. No component tests, no React Testing Library, no jsdom environment needed unless a later phase justifies it. Test files are `src/**/*.test.js`, scoped by the `test.include` block in `vite.config.js`.
+
+The `test` script runs `vitest run --passWithNoTests`. The flag matters: no test files exist until Phase 5, and Vitest treats an empty run as a failure, which would fail CI from day one.
 
 ### VS Code
 
@@ -272,6 +285,7 @@ Claude-in-CI needs an `ANTHROPIC_API_KEY` repo secret, which is undecided. The w
 It contains the on-demand setup: `anthropics/claude-code-action@v1`, triggered by `issue_comment` and `pull_request_review_comment` events guarded with `contains(github.event.comment.body, '@claude')`, passing `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` and `claude_args: --max-turns 10`.
 
 **To enable it:**
+
 1. Add `ANTHROPIC_API_KEY` to repo secrets (Settings → Secrets and variables → Actions)
 2. Install the Claude GitHub App at https://github.com/apps/claude
 3. Rename `claude.yml.disabled` → `claude.yml`
@@ -280,7 +294,7 @@ By design there is **no automatic review on every PR** — Claude runs only when
 
 ### Two things to know about how this actually behaves
 
-- **Vercel deploys in parallel with CI, not after it.** The Git integration starts building the moment you push, so a failing test does *not* prevent a preview deployment from appearing. The real gate is branch protection requiring the CI check before merge.
+- **Vercel deploys in parallel with CI, not after it.** The Git integration starts building the moment you push, so a failing test does _not_ prevent a preview deployment from appearing. The real gate is branch protection requiring the CI check before merge.
 - **Claude-in-CI costs are separate.** `claude-code-action` bills Claude API credits from console.anthropic.com — not the Claude Code subscription — and consumes GitHub Actions minutes.
 
 ---
@@ -304,15 +318,15 @@ npm test               # Vitest
 
 Build one phase at a time. **Do not build ahead of the current phase.**
 
-| # | Phase | Scope |
-|---|---|---|
-| 1 | Scaffold | Vite + React (JS), Ply CSS, React Router shell, ESLint/Prettier, `.vscode/`, `vercel.json`, `ci.yml`, `production` branch, Vercel project linked with Production Branch set |
-| 2 | Home | Featured products from `/products?limit=8` |
-| 3 | Listing | Category-filtered product list |
-| 4 | Detail | Single product view |
-| 5 | Cart | Zustand + `persist` middleware to localStorage |
-| 6 | Cart persistence | Move cart to Firestore |
-| 7 | Stretch | Firebase Auth — only if everything above is done |
+| #   | Phase            | Scope                                                                                                                                                                       |
+| --- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Scaffold         | Vite + React (JS), Ply CSS, React Router shell, ESLint/Prettier, `.vscode/`, `vercel.json`, `ci.yml`, `production` branch, Vercel project linked with Production Branch set |
+| 2   | Home             | Featured products from `/products?limit=8`                                                                                                                                  |
+| 3   | Listing          | Category-filtered product list                                                                                                                                              |
+| 4   | Detail           | Single product view                                                                                                                                                         |
+| 5   | Cart             | Zustand + `persist` middleware to localStorage                                                                                                                              |
+| 6   | Cart persistence | Move cart to Firestore                                                                                                                                                      |
+| 7   | Stretch          | Firebase Auth — only if everything above is done                                                                                                                            |
 
 ### Cart persistence
 
