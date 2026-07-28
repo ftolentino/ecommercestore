@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatPrice, unwrapProductList } from './products.js';
+import {
+  clampPage,
+  formatPrice,
+  getSkip,
+  getTotalPages,
+  unwrapCategoryList,
+  unwrapProductList,
+  unwrapProductPage,
+} from './products.js';
 
 describe('unwrapProductList', () => {
   it('returns the products array from a list envelope', () => {
@@ -58,5 +66,112 @@ describe('formatPrice', () => {
 
   it.each([[null], [undefined], ['9.99'], [NaN], [Infinity]])('throws on %p', (value) => {
     expect(() => formatPrice(value)).toThrow();
+  });
+});
+
+describe('unwrapProductPage', () => {
+  it('returns products and total together', () => {
+    expect(unwrapProductPage({ products: [{ id: 1 }], total: 194, skip: 0, limit: 8 })).toEqual({
+      products: [{ id: 1 }],
+      total: 194,
+    });
+  });
+
+  // An unknown category returns 200 with this shape rather than a 404, so it
+  // has to read as a valid empty page, not an error.
+  it('treats an empty envelope as a valid page with total 0', () => {
+    expect(unwrapProductPage({ products: [], total: 0, skip: 0, limit: 0 })).toEqual({
+      products: [],
+      total: 0,
+    });
+  });
+
+  it.each([[undefined], ['194'], [-1], [1.5], [null]])('throws when total is %p', (total) => {
+    expect(() => unwrapProductPage({ products: [], total })).toThrow(/total/i);
+  });
+});
+
+describe('unwrapCategoryList', () => {
+  it('maps a bare array to slug/name pairs, dropping the url', () => {
+    const payload = [
+      { slug: 'beauty', name: 'Beauty', url: 'https://dummyjson.com/products/category/beauty' },
+      { slug: 'laptops', name: 'Laptops', url: 'https://dummyjson.com/products/category/laptops' },
+    ];
+
+    expect(unwrapCategoryList(payload)).toEqual([
+      { slug: 'beauty', name: 'Beauty' },
+      { slug: 'laptops', name: 'Laptops' },
+    ]);
+  });
+
+  it('drops malformed entries instead of failing the whole filter', () => {
+    const payload = [{ slug: 'beauty', name: 'Beauty' }, { slug: 'no-name' }, null, { name: 'x' }];
+
+    expect(unwrapCategoryList(payload)).toEqual([{ slug: 'beauty', name: 'Beauty' }]);
+  });
+
+  // The product list endpoints use an envelope; this one does not.
+  it('throws on an enveloped payload', () => {
+    expect(() => unwrapCategoryList({ categories: [] })).toThrow(/bare array/i);
+  });
+
+  it.each([[null], [undefined], ['beauty']])('throws on %p', (payload) => {
+    expect(() => unwrapCategoryList(payload)).toThrow();
+  });
+});
+
+describe('getTotalPages', () => {
+  it.each([
+    [194, 12, 17],
+    [24, 12, 2],
+    [12, 12, 1],
+    [1, 12, 1],
+  ])('total %p at pageSize %p is %p pages', (total, size, expected) => {
+    expect(getTotalPages(total, size)).toBe(expected);
+  });
+
+  it('reports 1 page for an empty result so page 1 always exists', () => {
+    expect(getTotalPages(0, 12)).toBe(1);
+  });
+
+  it.each([
+    [-1, 12],
+    [1.5, 12],
+    [10, 0],
+    [10, -5],
+  ])('throws for total %p / pageSize %p', (total, size) => {
+    expect(() => getTotalPages(total, size)).toThrow();
+  });
+});
+
+describe('clampPage', () => {
+  it('keeps an in-range page', () => {
+    expect(clampPage(3, 17)).toBe(3);
+  });
+
+  it('parses a string page from the URL', () => {
+    expect(clampPage('4', 17)).toBe(4);
+  });
+
+  it('clamps above the last page down', () => {
+    expect(clampPage(999, 17)).toBe(17);
+  });
+
+  // Page numbers come straight from a user-editable query string.
+  it.each([['0'], ['-2'], ['abc'], [''], [null], [undefined], [NaN]])(
+    'falls back to page 1 for %p',
+    (page) => {
+      expect(clampPage(page, 17)).toBe(1);
+    }
+  );
+});
+
+describe('getSkip', () => {
+  it.each([
+    [1, 12, 0],
+    [2, 12, 12],
+    [17, 12, 192],
+  ])('page %p at size %p skips %p', (page, size, expected) => {
+    expect(getSkip(page, size)).toBe(expected);
   });
 });
