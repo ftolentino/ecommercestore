@@ -1,4 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { getItemCount } from '../lib/cart.js';
+import { useCartStore } from '../stores/useCartStore.js';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home', exact: true },
@@ -8,6 +10,7 @@ const NAV_LINKS = [
 
 export function Layout() {
   const { pathname } = useLocation();
+  const cartCount = getItemCount(useCartStore((state) => state.items));
 
   // Ply marks the active nav item on the <li>, not the <a>, so NavLink's
   // anchor-scoped className isn't a fit here.
@@ -24,7 +27,16 @@ export function Layout() {
         <ul>
           {NAV_LINKS.map((link) => (
             <li key={link.to} className={isActive(link) ? 'active' : undefined}>
-              <Link to={link.to}>{link.label}</Link>
+              <Link to={link.to}>
+                {link.label}
+                {link.to === '/cart' && cartCount > 0 && (
+                  <>
+                    {' '}
+                    <span className="badge badge-small">{cartCount}</span>
+                    <span className="sr-only"> items in cart</span>
+                  </>
+                )}
+              </Link>
             </li>
           ))}
         </ul>
