@@ -22,6 +22,45 @@ export function unwrapProductList(payload) {
 }
 
 /**
+ * The mirror of `unwrapProductList`: `/products/{id}` returns the product
+ * bare, so an enveloped payload here means the wrong endpoint was called.
+ *
+ * @param {unknown} payload
+ * @returns {object} The product.
+ */
+export function unwrapProduct(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(
+      `Unexpected DummyJSON response: expected a bare product object, received ${typeof payload}`
+    );
+  }
+
+  if (Array.isArray(payload.products)) {
+    throw new Error(
+      'Unexpected DummyJSON response: received a { products: [...] } envelope where a ' +
+        'bare product was expected. List endpoints must not be passed here.'
+    );
+  }
+
+  if (typeof payload.id !== 'number') {
+    throw new Error('Unexpected DummyJSON response: product is missing a numeric id.');
+  }
+
+  return payload;
+}
+
+/**
+ * Some products (groceries, for example) carry `brand: null` rather than
+ * omitting the key, so a plain `product.brand &&` check is what callers need
+ * and this normalises it to a single falsy shape.
+ *
+ * @returns {string} The brand, or '' when absent.
+ */
+export function getBrand(product) {
+  return typeof product?.brand === 'string' && product.brand.trim() ? product.brand : '';
+}
+
+/**
  * Same envelope as `unwrapProductList`, but also returns `total` so a listing
  * can paginate. `total` is the count for the *whole* query, not the page.
  *

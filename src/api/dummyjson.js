@@ -1,4 +1,9 @@
-import { unwrapCategoryList, unwrapProductList, unwrapProductPage } from '../lib/products.js';
+import {
+  unwrapCategoryList,
+  unwrapProduct,
+  unwrapProductList,
+  unwrapProductPage,
+} from '../lib/products.js';
 
 // Every fetch call in the app lives in this file. Keeping the boundary here is
 // what makes "DummyJSON is the only data source" verifiable by grepping for
@@ -15,7 +20,11 @@ async function getJson(path, signal) {
   // fetch only rejects on network failure, so a 404 or 500 would otherwise fall
   // through and fail later as a confusing parse error.
   if (!response.ok) {
-    throw new Error(`DummyJSON ${path} failed: ${response.status} ${response.statusText}`);
+    const error = new Error(`DummyJSON ${path} failed: ${response.status} ${response.statusText}`);
+    // Callers need to tell "this product doesn't exist" (404) apart from
+    // "the API is broken", so the status rides along on the error.
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();
@@ -58,4 +67,18 @@ export async function fetchProducts({ category, limit, skip }, signal) {
     : `/products?${query}`;
 
   return unwrapProductPage(await getJson(path, signal));
+}
+
+/**
+ * A single product. Note this endpoint returns the product **bare** — no
+ * envelope — unlike every list endpoint above.
+ *
+ * Rejects with an error carrying `status === 404` when the id doesn't exist.
+ *
+ * @param {string|number} id
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<object>}
+ */
+export async function fetchProduct(id, signal) {
+  return unwrapProduct(await getJson(`/products/${encodeURIComponent(id)}`, signal));
 }
