@@ -22,6 +22,79 @@ export function unwrapProductList(payload) {
 }
 
 /**
+ * Same envelope as `unwrapProductList`, but also returns `total` so a listing
+ * can paginate. `total` is the count for the *whole* query, not the page.
+ *
+ * @param {unknown} payload
+ * @returns {{ products: object[], total: number }}
+ */
+export function unwrapProductPage(payload) {
+  const products = unwrapProductList(payload);
+  const { total } = payload;
+
+  if (!Number.isInteger(total) || total < 0) {
+    throw new Error(
+      `Unexpected DummyJSON response: total must be a non-negative integer, received ${String(total)}`
+    );
+  }
+
+  return { products, total };
+}
+
+/**
+ * `/products/categories` returns a *bare array* of `{ slug, name, url }` —
+ * no envelope. Entries missing slug or name are dropped rather than thrown on,
+ * so one malformed category can't take down the whole filter.
+ *
+ * @param {unknown} payload
+ * @returns {{ slug: string, name: string }[]}
+ */
+export function unwrapCategoryList(payload) {
+  if (!Array.isArray(payload)) {
+    throw new Error(
+      `Unexpected DummyJSON response: /products/categories returns a bare array, received ${typeof payload}`
+    );
+  }
+
+  return payload
+    .filter((entry) => entry && typeof entry.slug === 'string' && typeof entry.name === 'string')
+    .map(({ slug, name }) => ({ slug, name }));
+}
+
+/**
+ * @returns {number} Page count, at least 1 so an empty result still has page 1.
+ */
+export function getTotalPages(total, pageSize) {
+  if (!Number.isInteger(total) || total < 0) {
+    throw new Error(`getTotalPages expected a non-negative integer total, received ${total}`);
+  }
+  if (!Number.isInteger(pageSize) || pageSize < 1) {
+    throw new Error(`getTotalPages expected a positive integer pageSize, received ${pageSize}`);
+  }
+
+  return Math.max(1, Math.ceil(total / pageSize));
+}
+
+/**
+ * Page numbers come from the URL, so they can be anything a user types.
+ * Anything unparseable collapses to page 1.
+ */
+export function clampPage(page, totalPages) {
+  const parsed = Number.parseInt(page, 10);
+
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+
+  return Math.min(parsed, Math.max(1, totalPages));
+}
+
+/**
+ * @returns {number} The `skip` value for a 1-based page number.
+ */
+export function getSkip(page, pageSize) {
+  return (Math.max(1, page) - 1) * pageSize;
+}
+
+/**
  * @param {number} value A price in USD.
  * @returns {string} e.g. `$9.99`
  */

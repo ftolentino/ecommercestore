@@ -1,4 +1,4 @@
-import { unwrapProductList } from '../lib/products.js';
+import { unwrapCategoryList, unwrapProductList, unwrapProductPage } from '../lib/products.js';
 
 // Every fetch call in the app lives in this file. Keeping the boundary here is
 // what makes "DummyJSON is the only data source" verifiable by grepping for
@@ -29,4 +29,33 @@ async function getJson(path, signal) {
  */
 export async function fetchFeaturedProducts(signal) {
   return unwrapProductList(await getJson('/products?limit=8', signal));
+}
+
+/**
+ * Category options for the listing filter.
+ *
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{ slug: string, name: string }[]>}
+ */
+export async function fetchCategories(signal) {
+  return unwrapCategoryList(await getJson('/products/categories', signal));
+}
+
+/**
+ * One page of the listing, optionally narrowed to a category.
+ *
+ * An unknown category slug is not an error here — DummyJSON answers 200 with
+ * `{ products: [], total: 0 }`, which surfaces as an empty page.
+ *
+ * @param {{ category?: string, limit: number, skip: number }} options
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{ products: object[], total: number }>}
+ */
+export async function fetchProducts({ category, limit, skip }, signal) {
+  const query = new URLSearchParams({ limit: String(limit), skip: String(skip) });
+  const path = category
+    ? `/products/category/${encodeURIComponent(category)}?${query}`
+    : `/products?${query}`;
+
+  return unwrapProductPage(await getJson(path, signal));
 }
