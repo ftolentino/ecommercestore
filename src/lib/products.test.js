@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   clampPage,
   formatPrice,
+  getBrand,
   getSkip,
   getTotalPages,
   unwrapCategoryList,
+  unwrapProduct,
   unwrapProductList,
   unwrapProductPage,
 } from './products.js';
@@ -173,5 +175,46 @@ describe('getSkip', () => {
     [17, 12, 192],
   ])('page %p at size %p skips %p', (page, size, expected) => {
     expect(getSkip(page, size)).toBe(expected);
+  });
+});
+
+describe('unwrapProduct', () => {
+  it('returns a bare product object', () => {
+    const product = { id: 6, title: 'Calvin Klein CK One', price: 49.99 };
+
+    expect(unwrapProduct(product)).toBe(product);
+  });
+
+  // The mirror of unwrapProductList's guard: passing a list payload here means
+  // the wrong endpoint was called.
+  it('throws when handed a list envelope', () => {
+    expect(() => unwrapProduct({ products: [], total: 0 })).toThrow(/envelope/i);
+  });
+
+  it('throws when the id is missing or not numeric', () => {
+    expect(() => unwrapProduct({ title: 'No id' })).toThrow(/id/i);
+    expect(() => unwrapProduct({ id: '6', title: 'String id' })).toThrow(/id/i);
+  });
+
+  it.each([[null], [undefined], ['a string'], [42], [[]]])('throws on %p', (payload) => {
+    expect(() => unwrapProduct(payload)).toThrow();
+  });
+});
+
+describe('getBrand', () => {
+  it('returns the brand when present', () => {
+    expect(getBrand({ brand: 'Chanel' })).toBe('Chanel');
+  });
+
+  // Groceries return brand: null rather than omitting the key.
+  it.each([[null], [undefined], [''], ['   '], [42]])(
+    'returns an empty string for brand %p',
+    (brand) => {
+      expect(getBrand({ brand })).toBe('');
+    }
+  );
+
+  it('tolerates a missing product', () => {
+    expect(getBrand(undefined)).toBe('');
   });
 });
