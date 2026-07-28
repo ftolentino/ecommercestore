@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchProduct } from '../api/dummyjson.js';
+import { getDiscountedPrice } from '../lib/cart.js';
 import { formatPrice, getBrand } from '../lib/products.js';
+import { useCartStore } from '../stores/useCartStore.js';
 
 export function ProductDetailPage() {
   const { id } = useParams();
@@ -13,6 +15,9 @@ export function ProductDetailPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [activeImage, setActiveImage] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  const [justAdded, setJustAdded] = useState(false);
+
+  const addItem = useCartStore((state) => state.addItem);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -23,6 +28,7 @@ export function ProductDetailPage() {
         // Reset the gallery: navigating between products reuses this
         // component, so the previous product's index would otherwise stick.
         setActiveImage(0);
+        setJustAdded(false);
         setStatus('success');
       })
       .catch((error) => {
@@ -120,9 +126,14 @@ export function ProductDetailPage() {
           {brand && <p className="text-secondary no-margin">{brand}</p>}
 
           <p>
-            <strong className="h3">{formatPrice(product.price)}</strong>{' '}
+            <strong className="h3">
+              {formatPrice(getDiscountedPrice(product.price, product.discountPercentage))}
+            </strong>{' '}
             {product.discountPercentage > 0 && (
-              <span className="label label-red">{product.discountPercentage}% off</span>
+              <>
+                <s className="text-tertiary">{formatPrice(product.price)}</s>{' '}
+                <span className="label label-red">{product.discountPercentage}% off</span>
+              </>
             )}
           </p>
 
@@ -137,6 +148,26 @@ export function ProductDetailPage() {
           </p>
 
           <p>{product.description}</p>
+
+          <p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!inStock}
+              onClick={() => {
+                addItem(product, 1);
+                setJustAdded(true);
+              }}
+            >
+              {inStock ? 'Add to cart' : 'Out of stock'}
+            </button>
+          </p>
+
+          {justAdded && (
+            <div className="alert alert-green" role="status">
+              Added to your cart. <Link to="/cart">View cart</Link>
+            </div>
+          )}
 
           <dl>
             {product.sku && (
